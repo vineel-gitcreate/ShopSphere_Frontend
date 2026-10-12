@@ -6,6 +6,15 @@
   <meta name="theme-color" content="#0b1324" />
   <meta name="description" content="ShopSphere — modern shopping experience" />
   <title>ShopSphere</title>
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('shopsphere_theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <noscript>You need to enable JavaScript to run ShopSphere.</noscript>

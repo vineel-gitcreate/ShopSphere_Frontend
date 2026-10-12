@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -8,11 +8,19 @@ import {
   ShieldCheck,
   Truck,
   Sparkles,
+  ArrowRight,
+  AlertCircle,
+  KeyRound,
+  CheckCircle2,
+  X,
+  HelpCircle,
 } from "lucide-react";
+import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const [form, setForm] = useState({
@@ -21,662 +29,423 @@ export default function Login() {
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loginSuccessNotice, setLoginSuccessNotice] = useState("");
+
+  // Forgot Password Modal State
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: request code, 2: reset password
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotToken, setForgotToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [devHint, setDevHint] = useState("");
+
+  const fromLocation = location.state?.from?.pathname || "/";
 
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const executeLogin = async (email, password) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await api.post("/auth/login", {
+        email: email.trim(),
+        password: password,
+      });
+
+      const { token, user } = response.data;
+      if (!token || !user) {
+        throw new Error("Invalid response received from authentication server.");
+      }
+
+      login(user, token);
+
+      if (user.role === "ADMIN") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate(fromLocation, { replace: true });
+      }
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Invalid email or password. Please verify your credentials.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!form.email.trim() || !form.password) {
+      setError("Please provide both email and password.");
+      return;
+    }
+    executeLogin(form.email, form.password);
+  };
 
-    if (!form.email || !form.password) {
-      alert("Please enter email and password.");
+  const handleSendRecoveryCode = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setForgotError("Please enter your account email address.");
       return;
     }
 
-    login(form.email);
-    navigate("/");
+    try {
+      setForgotLoading(true);
+      setForgotError("");
+      const res = await api.post("/auth/forgot-password", { email: forgotEmail.trim() });
+      setDevHint(res.data?.devTokenHint || "");
+      if (res.data?.devTokenHint) {
+        setForgotToken(res.data.devTokenHint);
+      }
+      setForgotStep(2);
+    } catch (err) {
+      setForgotError(err.response?.data?.message || "Could not find an account with that email address.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotToken.trim()) {
+      setForgotError("Please provide the 6-digit verification code.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setForgotError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setForgotError("Passwords do not match. Please verify.");
+      return;
+    }
+
+    try {
+      setForgotLoading(true);
+      setForgotError("");
+      await api.post("/auth/reset-password", {
+        token: forgotToken.trim(),
+        newPassword: newPassword,
+      });
+
+      setForgotModalOpen(false);
+      setForm((prev) => ({ ...prev, email: forgotEmail, password: "" }));
+      setLoginSuccessNotice("Password has been reset successfully! Please sign in with your new password.");
+      setTimeout(() => setLoginSuccessNotice(""), 7000);
+    } catch (err) {
+      setForgotError(err.response?.data?.message || "Invalid or expired recovery code. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   return (
-    <>
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
+    <div className="auth-page-container">
+      {/* Left Promotional Showcase */}
+      <section className="auth-showcase-panel">
+        <div className="auth-showcase-content">
+          <Link to="/" className="brand-logo showcase-brand">
+            <span className="brand-icon">S</span>
+            <span className="brand-text light">
+              Shop<span className="brand-highlight">Sphere</span>
+            </span>
+          </Link>
 
-        .login-page {
-          min-height: calc(100vh - 72px);
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          background: #f8fafc;
-        }
+          <h1>
+            Your Gateway to <br />
+            <span>Curated Lifestyle & Tech.</span>
+          </h1>
 
-        /* ================= LEFT SIDE ================= */
+          <p className="showcase-desc">
+            Sign in to track orders in real-time, save your favorite products to
+            wishlist, and experience priority checkout with guaranteed buyer protection.
+          </p>
 
-        .login-left {
-          position: relative;
-          overflow: hidden;
-          padding: 70px;
-          display: flex;
-          align-items: center;
-          color: white;
-          background:
-            radial-gradient(
-              circle at 15% 20%,
-              rgba(96, 165, 250, 0.35),
-              transparent 30%
-            ),
-            radial-gradient(
-              circle at 85% 80%,
-              rgba(139, 92, 246, 0.3),
-              transparent 30%
-            ),
-            linear-gradient(135deg, #0f172a, #172554);
-        }
-
-        .login-left::before {
-          content: "";
-          position: absolute;
-          width: 450px;
-          height: 450px;
-          border-radius: 50%;
-          border: 70px solid rgba(255,255,255,0.04);
-          right: -180px;
-          top: -150px;
-        }
-
-        .login-left::after {
-          content: "";
-          position: absolute;
-          width: 320px;
-          height: 320px;
-          border-radius: 50%;
-          border: 50px solid rgba(255,255,255,0.04);
-          left: -150px;
-          bottom: -140px;
-        }
-
-        .login-left-content {
-          position: relative;
-          z-index: 2;
-          max-width: 560px;
-        }
-
-        .login-brand {
-          font-size: 30px;
-          font-weight: 900;
-          letter-spacing: -1.5px;
-          margin-bottom: 75px;
-        }
-
-        .login-brand span {
-          color: #60a5fa;
-        }
-
-        .login-left h1 {
-          font-size: clamp(40px, 4vw, 62px);
-          line-height: 1.05;
-          letter-spacing: -2.5px;
-          margin: 0 0 25px;
-        }
-
-        .login-left-description {
-          color: #cbd5e1;
-          font-size: 17px;
-          line-height: 1.7;
-          max-width: 500px;
-          margin-bottom: 35px;
-        }
-
-        .login-benefits {
-          display: grid;
-          gap: 17px;
-        }
-
-        .login-benefit {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-        }
-
-        .login-benefit-icon {
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
-          background: rgba(255,255,255,0.09);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #93c5fd;
-          flex-shrink: 0;
-        }
-
-        .login-benefit-text strong {
-          display: block;
-          font-size: 14px;
-          margin-bottom: 2px;
-        }
-
-        .login-benefit-text span {
-          color: #94a3b8;
-          font-size: 12px;
-        }
-
-        .login-feature {
-          margin-top: 38px;
-          padding: 17px;
-          max-width: 420px;
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          border-radius: 17px;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .login-feature-icon {
-          width: 52px;
-          height: 52px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(96,165,250,0.12);
-          color: #93c5fd;
-        }
-
-        .login-feature strong {
-          display: block;
-          font-size: 14px;
-        }
-
-        .login-feature span {
-          color: #94a3b8;
-          font-size: 12px;
-        }
-
-        /* ================= RIGHT SIDE ================= */
-
-        .login-right {
-          background: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 50px;
-        }
-
-        .login-form-container {
-          width: 100%;
-          max-width: 450px;
-        }
-
-        .login-header {
-          margin-bottom: 30px;
-        }
-
-        .login-header h2 {
-          margin: 0 0 8px;
-          color: #111827;
-          font-size: 34px;
-          letter-spacing: -1px;
-        }
-
-        .login-header p {
-          margin: 0;
-          color: #6b7280;
-          font-size: 14px;
-        }
-
-        .login-header a {
-          color: #2563eb;
-          text-decoration: none;
-          font-weight: 750;
-        }
-
-        .login-form-group {
-          margin-bottom: 19px;
-        }
-
-        .login-label-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-
-        .login-label {
-          font-size: 13px;
-          font-weight: 750;
-          color: #111827;
-        }
-
-        .forgot-password {
-          font-size: 12px;
-          color: #2563eb;
-          text-decoration: none;
-          font-weight: 700;
-        }
-
-        .login-input-wrapper {
-          position: relative;
-        }
-
-        .login-input {
-          width: 100%;
-          height: 52px;
-          padding: 0 45px 0 44px;
-          border: 1px solid #e5e7eb;
-          border-radius: 11px;
-          outline: none;
-          background: #f8fafc;
-          color: #111827;
-          font-size: 14px;
-          transition: 0.2s;
-        }
-
-        .login-input:focus {
-          border-color: #2563eb;
-          background: white;
-          box-shadow: 0 0 0 4px rgba(37,99,235,0.08);
-        }
-
-        .login-input::placeholder {
-          color: #9ca3af;
-        }
-
-        .login-input-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #9ca3af;
-        }
-
-        .login-password-button {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          border: none;
-          background: transparent;
-          color: #9ca3af;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-
-        .login-options {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin: 8px 0 22px;
-        }
-
-        .remember-me {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #6b7280;
-          font-size: 13px;
-          cursor: pointer;
-        }
-
-        .remember-me input {
-          width: 15px;
-          height: 15px;
-          accent-color: #2563eb;
-        }
-
-        .login-submit {
-          width: 100%;
-          height: 52px;
-          border: none;
-          border-radius: 11px;
-          color: white;
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
-          font-weight: 800;
-          font-size: 15px;
-          cursor: pointer;
-          box-shadow: 0 8px 20px rgba(37,99,235,0.2);
-          transition: 0.2s;
-        }
-
-        .login-submit:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 12px 25px rgba(37,99,235,0.28);
-        }
-
-        .login-divider {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin: 25px 0;
-          color: #9ca3af;
-          font-size: 12px;
-        }
-
-        .login-divider::before,
-        .login-divider::after {
-          content: "";
-          flex: 1;
-          height: 1px;
-          background: #e5e7eb;
-        }
-
-        .google-login {
-          width: 100%;
-          height: 50px;
-          border: 1px solid #e5e7eb;
-          background: white;
-          border-radius: 11px;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 10px;
-          font-weight: 700;
-          color: #111827;
-          cursor: pointer;
-          transition: 0.2s;
-        }
-
-        .google-login:hover {
-          background: #f8fafc;
-          border-color: #cbd5e1;
-        }
-
-        .google-icon {
-          font-size: 18px;
-          font-weight: 900;
-          color: #4285f4;
-        }
-
-        .login-terms {
-          margin-top: 22px;
-          text-align: center;
-          color: #9ca3af;
-          font-size: 11px;
-          line-height: 1.6;
-        }
-
-        .login-terms a {
-          color: #2563eb;
-          text-decoration: none;
-          font-weight: 700;
-        }
-
-        /* ================= MOBILE ================= */
-
-        @media (max-width: 850px) {
-          .login-page {
-            grid-template-columns: 1fr;
-          }
-
-          .login-left {
-            display: none;
-          }
-
-          .login-right {
-            min-height: calc(100vh - 72px);
-            padding: 35px 20px;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .login-right {
-            padding: 30px 16px;
-          }
-
-          .login-header h2 {
-            font-size: 29px;
-          }
-
-          .login-options {
-            align-items: flex-start;
-            gap: 10px;
-          }
-        }
-      `}</style>
-
-      <div className="login-page">
-
-        {/* LEFT SIDE */}
-        <div className="login-left">
-          <div className="login-left-content">
-
-            <div className="login-brand">
-              Shop<span>Sphere</span>
-            </div>
-
-            <h1>
-              Everything you need.
-              <br />
-              All in one place.
-            </h1>
-
-            <p className="login-left-description">
-              Discover thousands of products, exclusive deals and a shopping
-              experience designed around you.
-            </p>
-
-            <div className="login-benefits">
-
-              <div className="login-benefit">
-                <div className="login-benefit-icon">
-                  <ShieldCheck size={21} />
-                </div>
-
-                <div className="login-benefit-text">
-                  <strong>Secure Shopping</strong>
-                  <span>Your account and payments stay protected.</span>
-                </div>
+          <div className="showcase-features">
+            <div className="showcase-feature-item">
+              <div className="feature-icon-circle">
+                <ShieldCheck size={20} />
               </div>
-
-              <div className="login-benefit">
-                <div className="login-benefit-icon">
-                  <Truck size={21} />
-                </div>
-
-                <div className="login-benefit-text">
-                  <strong>Fast Delivery</strong>
-                  <span>Reliable delivery right to your doorstep.</span>
-                </div>
-              </div>
-
-              <div className="login-benefit">
-                <div className="login-benefit-icon">
-                  <Sparkles size={21} />
-                </div>
-
-                <div className="login-benefit-text">
-                  <strong>Exclusive Deals</strong>
-                  <span>Get access to special offers and discounts.</span>
-                </div>
-              </div>
-
-            </div>
-
-            <div className="login-feature">
-              <div className="login-feature-icon">
-                <Sparkles size={24} />
-              </div>
-
               <div>
-                <strong>Welcome back to ShopSphere</strong>
-                <span>Continue your shopping journey.</span>
+                <strong>Secure JWT Authentication</strong>
+                <small>Encrypted sessions with BCrypt hashed security</small>
               </div>
             </div>
 
+            <div className="showcase-feature-item">
+              <div className="feature-icon-circle">
+                <Truck size={20} />
+              </div>
+              <div>
+                <strong>Fast Express Doorstep Delivery</strong>
+                <small>Track live package milestones from order to delivery</small>
+              </div>
+            </div>
+
+            <div className="showcase-feature-item">
+              <div className="feature-icon-circle">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <strong>VIP Member Privileges</strong>
+                <small>Exclusive flash sales and member-only coupons</small>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* RIGHT SIDE */}
-        <div className="login-right">
+      {/* Right Login Form */}
+      <section className="auth-form-panel">
+        <div className="auth-card-wrapper">
+          <div className="auth-header">
+            <h2>Welcome Back</h2>
+            <p>
+              Don't have an account yet?{" "}
+              <Link to="/register" className="auth-link">
+                Create one now
+              </Link>
+            </p>
+          </div>
 
-          <div className="login-form-container">
+          {loginSuccessNotice && (
+            <div className="success-alert">
+              <CheckCircle2 size={18} />
+              <span>{loginSuccessNotice}</span>
+            </div>
+          )}
 
-            <div className="login-header">
-              <h2>Welcome back 👋</h2>
+          {error && (
+            <div className="error-alert">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+          )}
 
-              <p>
-                Don't have an account?{" "}
-                <Link to="/register">
-                  Create one
-                </Link>
-              </p>
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label htmlFor="login-email">Email Address</label>
+              <div className="input-with-icon">
+                <Mail size={18} className="field-icon" />
+                <input
+                  type="email"
+                  id="login-email"
+                  name="email"
+                  placeholder="name@example.com"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
-
-              {/* EMAIL */}
-              <div className="login-form-group">
-
-                <div className="login-label-row">
-                  <label className="login-label">
-                    Email address
-                  </label>
-                </div>
-
-                <div className="login-input-wrapper">
-
-                  <Mail
-                    size={18}
-                    className="login-input-icon"
-                  />
-
-                  <input
-                    className="login-input"
-                    type="email"
-                    name="email"
-                    placeholder="Enter your email"
-                    value={form.email}
-                    onChange={handleChange}
-                    required
-                  />
-
-                </div>
-
+            <div className="form-group">
+              <label htmlFor="login-password">Password</label>
+              <div className="input-with-icon">
+                <Lock size={18} className="field-icon" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="login-password"
+                  name="password"
+                  placeholder="••••••••"
+                  value={form.password}
+                  onChange={handleChange}
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
+              <div className="forgot-password-row">
+                <button
+                  type="button"
+                  className="auth-forgot-link"
+                  onClick={() => {
+                    setForgotModalOpen(true);
+                    setForgotStep(1);
+                    setForgotEmail(form.email || "");
+                    setForgotError("");
+                    setDevHint("");
+                  }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            </div>
 
-              {/* PASSWORD */}
-              <div className="login-form-group">
+            <button
+              type="submit"
+              className="btn btn-primary btn-full btn-lg auth-submit-btn"
+              disabled={loading}
+            >
+              <span>{loading ? "Signing In..." : "Sign In to ShopSphere"}</span>
+              <ArrowRight size={18} />
+            </button>
+          </form>
 
-                <div className="login-label-row">
+          <div className="auth-footer-terms">
+            By signing in, you agree to ShopSphere's{" "}
+            <a href="#terms" onClick={(e) => e.preventDefault()}>Terms of Use</a> and{" "}
+            <a href="#privacy" onClick={(e) => e.preventDefault()}>Privacy Policy</a>.
+          </div>
+        </div>
+      </section>
 
-                  <label className="login-label">
-                    Password
-                  </label>
+      {/* Forgot Password Modal */}
+      {forgotModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card forgot-password-modal">
+            <div className="modal-header">
+              <div className="modal-title-row">
+                <div className="modal-icon-badge">
+                  <KeyRound size={22} />
+                </div>
+                <div>
+                  <h3>{forgotStep === 1 ? "Password Recovery" : "Set New Password"}</h3>
+                  <p className="modal-subtitle">
+                    {forgotStep === 1
+                      ? "Enter your email to receive a secure recovery verification code"
+                      : "Enter verification code and your new credentials"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setForgotModalOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-                  <a
-                    href="#forgot"
-                    className="forgot-password"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      alert("Password recovery will be connected to the backend later.");
-                    }}
-                  >
-                    Forgot password?
-                  </a>
+            {forgotError && (
+              <div className="error-alert" style={{ margin: "16px 20px 0" }}>
+                <AlertCircle size={18} />
+                <span>{forgotError}</span>
+              </div>
+            )}
 
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendRecoveryCode} className="modal-body">
+                <div className="form-group">
+                  <label htmlFor="recovery-email">Registered Email Address</label>
+                  <div className="input-with-icon">
+                    <Mail size={18} className="field-icon" />
+                    <input
+                      type="email"
+                      id="recovery-email"
+                      placeholder="e.g. customer@shopsphere.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div className="login-input-wrapper">
-
-                  <Lock
-                    size={18}
-                    className="login-input-icon"
-                  />
-
-                  <input
-                    className="login-input"
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                  />
-
+                <div className="modal-actions">
                   <button
                     type="button"
-                    className="login-password-button"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
+                    className="btn btn-outline"
+                    onClick={() => setForgotModalOpen(false)}
                   >
-                    {showPassword ? (
-                      <EyeOff size={18} />
-                    ) : (
-                      <Eye size={18} />
-                    )}
+                    Cancel
                   </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={forgotLoading}
+                  >
+                    <span>{forgotLoading ? "Dispatching Code..." : "Send Recovery Code"}</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPasswordSubmit} className="modal-body">
+                {devHint && (
+                  <div className="info-banner" style={{ marginBottom: "16px" }}>
+                    <div className="dev-hint-badge">
+                      <strong>Code dispatched to:</strong> {forgotEmail}
+                      <br />
+                      <span className="code-display">Code: {devHint}</span>
+                    </div>
+                  </div>
+                )}
 
+                <div className="form-group">
+                  <label htmlFor="reset-token">6-Digit Verification Code *</label>
+                  <input
+                    type="text"
+                    id="reset-token"
+                    placeholder="Enter 6-digit code"
+                    value={forgotToken}
+                    onChange={(e) => setForgotToken(e.target.value)}
+                    maxLength={10}
+                    required
+                  />
                 </div>
 
-              </div>
-
-              {/* OPTIONS */}
-              <div className="login-options">
-
-                <label className="remember-me">
+                <div className="form-group">
+                  <label htmlFor="new-password">New Password *</label>
                   <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) =>
-                      setRemember(e.target.checked)
-                    }
+                    type="password"
+                    id="new-password"
+                    placeholder="Minimum 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
                   />
+                </div>
 
-                  Remember me
-                </label>
+                <div className="form-group">
+                  <label htmlFor="confirm-password">Confirm New Password *</label>
+                  <input
+                    type="password"
+                    id="confirm-password"
+                    placeholder="Repeat new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
 
-              </div>
-
-              {/* LOGIN */}
-              <button
-                type="submit"
-                className="login-submit"
-              >
-                Sign In
-              </button>
-
-            </form>
-
-            {/* DIVIDER */}
-            <div className="login-divider">
-              <span>OR CONTINUE WITH</span>
-            </div>
-
-            {/* GOOGLE */}
-            <button
-              type="button"
-              className="google-login"
-              onClick={() =>
-                alert("Google login will be connected with the backend later.")
-              }
-            >
-              <span className="google-icon">G</span>
-              Continue with Google
-            </button>
-
-            {/* TERMS */}
-            <div className="login-terms">
-              By continuing, you agree to our{" "}
-              <a href="#terms">Terms of Service</a>{" "}
-              and{" "}
-              <a href="#privacy">Privacy Policy</a>.
-            </div>
-
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setForgotStep(1)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={forgotLoading}
+                  >
+                    <span>{forgotLoading ? "Resetting..." : "Save New Password"}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-
         </div>
-
-      </div>
-    </>
+      )}
+    </div>
   );
 }
