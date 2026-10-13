@@ -10,6 +10,7 @@ import {
   Code,
   ExternalLink,
 } from "lucide-react";
+import { BACKEND_ROOT_URL } from "../services/api";
 
 export default function Footer() {
   const [subscribed, setSubscribed] = useState(false);
@@ -82,7 +83,7 @@ export default function Footer() {
             <li><a href="#returns-policy" onClick={(e) => e.preventDefault()}>7-Day Return Guarantee</a></li>
             <li>
               <a
-                href="http://localhost:8080/swagger-ui/index.html"
+                href={`${BACKEND_ROOT_URL}/swagger-ui/index.html`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ color: "var(--sky-light)", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "6px" }}

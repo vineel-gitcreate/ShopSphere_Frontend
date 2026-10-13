@@ -23,4 +23,4 @@ Open http://localhost:3000
 - Mock product data
 - Reusable components and contexts
 
-Backend integration is intentionally not enabled yet. The API client is prepared for `http://localhost:8080/api`.
+Backend integration is configured for production at `https://shopsphere-backend-ybp1.onrender.com/api`.
