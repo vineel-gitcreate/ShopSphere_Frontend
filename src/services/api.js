@@ -1,18 +1,18 @@
 import axios from "axios";
 
-// Determine the API base URL with production fallback to live Render backend
+const DEPLOYED_BACKEND_URL = "https://shopsphere-backend-ybp1.onrender.com/api";
+
+// Determine the API base URL with deployed Render backend as default
 const getApiBaseUrl = () => {
   const envUrl =
     (typeof process !== "undefined" && process.env && process.env.REACT_APP_API_URL) ||
     (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL);
 
-  const isProduction = process.env.NODE_ENV === "production";
-  let target = envUrl;
+  let target = envUrl || DEPLOYED_BACKEND_URL;
 
-  // In production builds (Vercel deployment), if env variable is unset or accidentally points to localhost,
-  // automatically route to the live deployed Render backend so the app never throws ERR_CONNECTION_REFUSED.
-  if (!target || (isProduction && target.includes("localhost"))) {
-    target = "https://shopsphere-backend-ybp1.onrender.com/api";
+  // In case envUrl is accidentally empty or points to localhost when not running local backend, default to live backend
+  if (!target || target.trim() === "" || target.includes("localhost")) {
+    target = DEPLOYED_BACKEND_URL;
   }
 
   // Ensure trailing slashes are removed and /api subpath is preserved
